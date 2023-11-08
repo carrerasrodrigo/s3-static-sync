@@ -1,0 +1,4 @@
+__pycache__
+build
+dist
+s3_static_sync.egg-info
