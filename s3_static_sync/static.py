@@ -3,15 +3,20 @@ import os
 
 
 def scan_folder(folder_path, allow_extension=None, ignore_extension=None):
-    for root, dir_list, file_list in os.walk(folder_path):
+    root_absolute_path = os.path.abspath(folder_path)
+    for root, dir_list, file_list in os.walk(root_absolute_path):
         for file_name in file_list:
             if allow_extension is not None and not file_name.endswith(tuple(allow_extension)):
                 continue
 
             if ignore_extension is not None and file_name.endswith(tuple(ignore_extension)):
                 continue
-            yield os.path.join(root, file_name)
 
+            absolute_file_path = os.path.join(root, file_name)
+            parent_containing_folder = os.path.dirname(
+                os.path.abspath(root_absolute_path))
+            relative_path = absolute_file_path[len(parent_containing_folder) + 1:]
+            yield absolute_file_path, relative_path
 
 def get_md5_content(file_path):
     with open(file_path, 'rb') as f:
@@ -26,14 +31,11 @@ def get_file_size(file_path):
     return os.path.getsize(file_path)
 
 
-def compose_file_name(folder_path, s3_folder_path,
-        file_path,
-        header_cache_control,
-        header_expires_delta,
-        use_gzip, use_content, use_size, use_timestamp):
-
-    root, file_ext = os.path.splitext(file_path)
-    file_name = root.split('/')[-1]
+def compose_file_name(folder_path, s3_folder_path, file_path,
+        header_cache_control, header_expires_delta,use_gzip, use_content,
+        use_size, use_timestamp):
+    file_name = os.path.basename(file_path)
+    file_name_root, file_ext = os.path.splitext(file_name)
 
     key = f'{header_cache_control}-{header_expires_delta}-{use_gzip}'
 
@@ -47,7 +49,8 @@ def compose_file_name(folder_path, s3_folder_path,
         key += str(get_timestamp(file_path))
 
     file_hash = hashlib.md5(key.encode()).hexdigest()
-    new_file_name = f'{file_name}-{file_hash}{file_ext}'
+    absolute_folder_path = os.path.abspath(folder_path)
+    new_file_name = f'{file_name_root}-{file_hash}{file_ext}'
     new_file_path = os.path.join(os.path.dirname(file_path),
-        new_file_name)[len(folder_path):]
-    return new_file_name, f'{s3_folder_path}{new_file_path}'
+        new_file_name)[len(absolute_folder_path):]
+    return f'{s3_folder_path}{new_file_path}'

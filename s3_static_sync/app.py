@@ -1,5 +1,6 @@
 from . import static
 from . import s3
+from .log import log
 import click
 import json
 import os
@@ -61,27 +62,31 @@ ACL_CHOICE = [
     'If not present, the script will do one request to obtain the files contained in a folder '
     'and keep the list in memory. Enable this flag only if you have many files and '
     'you need a low memory footprint.')
+@click.option('--verbose-level', '-v',
+    type=click.Choice(['0', '1', '2']),
+    default='2',
+    help='Verbose level. 0: no output, 1: only resume, 2: full verbose')
 def runner(bucket, bucket_region, local_folder, s3_folder, allow_extension,
-        ignore_extension, acl,
-        manifest_file, sync_strategy, header_cache_control,
-        header_expires_delta, gzip, fail_on_error, dry_run, low_memory_mode):
+        ignore_extension, acl, manifest_file, sync_strategy,
+        header_cache_control, header_expires_delta, gzip, fail_on_error,
+        dry_run, low_memory_mode, verbose_level):
 
     s3_client = s3.get_client(bucket_region)
     s3_folder = s3.normalize_folder_name(s3_folder)
     s3_folder_file_list = None
     manifest = {}
+    summary = dict(total=0, skipped=0, uploaded=0, error=0)
 
     if not low_memory_mode:
-        click.echo(f'=> listing files from remote s3 bucket s3://{bucket}')
+        log(f'=> listing files from remote s3 bucket s3://{bucket}',
+            verbose_level, 2)
         s3_folder_file_list = s3.list_folder_s3(s3_client, bucket, s3_folder)
 
-    for file_path in static.scan_folder(local_folder, allow_extension,
-            ignore_extension):
-        relative_file_path = os.path.join(
-            file_path[0: len(local_folder)].split('/')[-1],
-            file_path[len(local_folder) + 1:])
+    for file_path, manifest_path in static.scan_folder(local_folder,
+            allow_extension, ignore_extension):
+        summary['total'] += 1
 
-        _, s3_key = static.compose_file_name(
+        s3_key = static.compose_file_name(
             local_folder,
             s3_folder,
             file_path,
@@ -94,8 +99,9 @@ def runner(bucket, bucket_region, local_folder, s3_folder, allow_extension,
 
         if (s3_folder_file_list is not None and s3_key in s3_folder_file_list) or \
                 (s3_folder_file_list is None and s3.check_key_exists(s3_client, bucket, s3_key)):
-            manifest[relative_file_path] = s3_key
-            click.echo(f'=> file exist, skip {relative_file_path}')
+            manifest[manifest_path] = s3_key
+            log(f'=> file exist, skip {manifest_path}', verbose_level, 2)
+            summary['skipped'] += 1
             continue
 
         if not dry_run:
@@ -110,15 +116,26 @@ def runner(bucket, bucket_region, local_folder, s3_folder, allow_extension,
         if not success:
             if fail_on_error:
                 raise Exception(err)
-            click.echo(f'=> error uploading file, not adding to manifest '
-                'file: {err}')
+            log(f'=> error uploading file, not adding to manifest '
+                'file: {err}', verbose_level, 2)
+            summary['error'] += 1
         else:
-            click.echo(f'=> file uploaded {relative_file_path}')
-            manifest[relative_file_path] = s3_key
+            click.echo(f'=> file uploaded {manifest_path}')
+            manifest[manifest_path] = s3_key
+            summary['uploaded'] += 1
 
-    click.echo(f'=> writing manifest at {manifest_file}')
+    log(f'=> writing manifest at {manifest_file}', verbose_level, 2)
     with open(manifest_file, 'w', encoding='utf-8') as f:
-        f.write(json.dumps(manifest))
+        f.write(json.dumps(manifest, indent=2))
+
+    summary_text = (
+        f'\n=> Resume\n'
+        f'==> Total   : {summary["total"]}\n'
+        f'==> Uploaded: {summary["uploaded"]}\n'
+        f'==> Skipped : {summary["skipped"]}\n'
+        f'==> Error   : {summary["error"]}'
+    )
+    log(summary_text, verbose_level, 1)
 
 
 if __name__ == '__main__':
