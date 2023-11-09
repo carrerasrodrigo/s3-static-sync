@@ -80,7 +80,8 @@ def runner(bucket, bucket_region, local_folder, s3_folder, allow_extension,
     if not low_memory_mode:
         log(f'=> listing files from remote s3 bucket s3://{bucket}',
             verbose_level, 2)
-        s3_folder_file_list = s3.list_folder_s3(s3_client, bucket, s3_folder)
+        s3_folder_file_list = list(
+            s3.list_folder_s3(s3_client, bucket, s3_folder))
 
     for file_path, manifest_path in static.scan_folder(local_folder,
             allow_extension, ignore_extension):

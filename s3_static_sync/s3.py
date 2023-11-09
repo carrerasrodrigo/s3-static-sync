@@ -77,7 +77,15 @@ def check_key_exists(client, bucket, key):
 
 
 def list_folder_s3(s3_client, bucket, folder_path):
-    response = s3_client.list_objects_v2(Bucket=bucket, Prefix=folder_path)
-    if response['KeyCount'] == 0:
-        return []
-    return [content["Key"] for content in response["Contents"]]
+    params = {}
+    while True:
+        response = s3_client.list_objects_v2(Bucket=bucket, Prefix=folder_path,
+            **params)
+        if response['KeyCount'] == 0:
+            return []
+        for content in response['Contents']:
+            yield content['Key']
+        if not response['IsTruncated']:
+            return
+
+        params['ContinuationToken'] = response['NextContinuationToken']
