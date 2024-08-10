@@ -82,7 +82,7 @@ def list_folder_s3(s3_client, bucket, folder_path):
         response = s3_client.list_objects_v2(Bucket=bucket, Prefix=folder_path,
             **params)
         if response['KeyCount'] == 0:
-            return []
+            return
         for content in response['Contents']:
             yield content['Key']
         if not response['IsTruncated']:

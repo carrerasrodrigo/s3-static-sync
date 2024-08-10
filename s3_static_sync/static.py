@@ -32,7 +32,7 @@ def get_file_size(file_path):
 
 
 def compose_file_name(folder_path, s3_folder_path, file_path,
-        header_cache_control, header_expires_delta,use_gzip, use_content,
+        header_cache_control, header_expires_delta, use_gzip, use_content,
         use_size, use_timestamp):
     file_name = os.path.basename(file_path)
     file_name_root, file_ext = os.path.splitext(file_name)
